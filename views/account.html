@@ -1,4 +1,4 @@
-{{define "account"}}
+{{define "account/index"}}
 <!DOCTYPE html>
 <html lang="zh-cn">
 	{{template "header"}}
@@ -6,25 +6,7 @@
 	
 	<div class="wrapper">
 		<!-- ============================================================= TOP NAVIGATION ============================================================= -->
-<nav class="top-bar animate-dropdown">
-    <div class="container">
-        <div class="col-xs-12 col-sm-6 no-margin">
-            <ul>
-                <li><a href="index.html">首页</a></li>
-                <li><a href="category-grid.html">所有分类</a></li>
-                <li><a href="cart.html">我的购物车</a></li>
-                <li><a href="orders.html">我的订单</a></li>
-            </ul>
-        </div><!-- /.col -->
-
-        <div class="col-xs-12 col-sm-6 no-margin">
-            <ul class="right">
-                <li><a href="authentication.html">注册</a></li>
-                <li><a href="authentication.html">登录</a></li>
-            </ul>
-        </div><!-- /.col -->
-    </div><!-- /.container -->
-</nav><!-- /.top-bar -->
+{{template "navbar"}}
 <!-- ============================================================= TOP NAVIGATION : END ============================================================= -->		<!-- ============================================================= HEADER ============================================================= -->
 <!-- ============================================================= HEADER : END ============================================================= -->		<!-- ========================================= MAIN ========================================= -->
 <main id="authentication" class="inner-bottom-md">
@@ -47,21 +29,18 @@
 						</div>
 					</div>
 
-					<form role="form" class="login-form cf-style-1">
+					<form role="form" class="login-form cf-style-1" action="/account/login" method="post">
 						<div class="field-row">
                             <label>电子邮箱</label>
-                            <input type="text" class="le-input">
+                            <input type="text" class="le-input" name="email">
                         </div><!-- /.field-row -->
 
                         <div class="field-row">
                             <label>密码</label>
-                            <input type="text" class="le-input">
+                            <input type="password" class="le-input" name="password">
                         </div><!-- /.field-row -->
 
                         <div class="field-row clearfix">
-                        	<span class="pull-left">
-                        		<label class="content-color"><input type="checkbox" class="le-checbox auto-width inline"> <span class="bold">记住我</span></label>
-                        	</span>
                         	<span class="pull-right">
                         		<a href="#" class="content-color bold">忘记密码 ?</a>
                         	</span>
@@ -79,13 +58,19 @@
 				<section class="section register inner-left-xs">
 					<h2 class="bordered">新建账户</h2>
 					<p>创建一个属于你自己的账户</p>
-
-					<form role="form" class="register-form cf-style-1">
+					<form role="form" class="register-form cf-style-1" action="/account/register" method="post">
 						<div class="field-row">
                             <label>电子邮箱</label>
-                            <input type="text" class="le-input">
+                            <input type="text" class="le-input" name="email">
                         </div><!-- /.field-row -->
-
+                        <div class="field-row">
+                            <label>用户名</label>
+                            <input type="text" class="le-input" name="username">
+                        </div><!-- /.field-row -->
+                        <div class="field-row">
+                            <label>密码</label>
+                            <input type="password" class="le-input" name="password">
+                        </div><!-- /.field-row -->
                         <div class="buttons-holder">
                             <button type="submit" class="le-button huge">注册</button>
                         </div><!-- /.buttons-holder -->

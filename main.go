@@ -8,15 +8,21 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"shop/controller"
+	"shop/router"
+	"shop/db"
+	"log"
+	"shop/pkg/session"
 )
 func main(){
 	r := gin.Default()
-	r.LoadHTMLGlob("./views/*")
-	r.Static("/static","./public")
-	r.GET("/index",controller.IndexController)
-	r.GET("/category",controller.Category)
-	r.GET("/cargo",controller.CargoDetail)
-	r.GET("/cart",controller.Cart)
-	r.Run(":8080")
+	err := db.Init()
+	defer db.Close()
+	if err != nil{
+
+	}
+	session.Init()
+	router.LoadRouter(r)
+	if err = r.Run(":8080");err != nil{
+		log.Fatalln(err.Error())
+	}
 }

@@ -15,6 +15,8 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"time"
 	"html/template"
+	"fmt"
+	"crypto/md5"
 )
 
 //用户注册:传入参数username,password,email
@@ -32,7 +34,7 @@ func Register(c * gin.Context){
 		})
 		return
 	}
-
+	password = fmt.Sprintf("%x", md5.Sum([]byte(password)))
 	//插入数据库
 	var UID uint64
 	if UID,err = accountDB.InsertUser(email,username,password);err != nil{

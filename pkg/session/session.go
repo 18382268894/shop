@@ -12,6 +12,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 var(
@@ -38,43 +39,45 @@ type Session interface {
 
 type MemorySession struct {
 	id  string
-	kv map[string]interface{}
-	rw sync.RWMutex
+	kv sync.Map
 }
 
 
 func newMemorySession(id string)(ms *MemorySession){
 	return &MemorySession{
 		id:id,
-		kv:make(map[string]interface{},5),
 	}
 }
 
 
 func (ms *MemorySession)Set(key string,val interface{}){
-	ms.rw.Lock()
-	defer ms.rw.Unlock()
-	ms.kv[key] = val
+	ms.kv.Store(key,val)
 }
 
+
 func (ms *MemorySession)Get(key string)(val interface{},err error){
-	ms.rw.RLock()
 	var ok bool
-	if val,ok = ms.kv[key];ok{
+	if val,ok = ms.kv.Load(key);ok{
 		return
 	}
-	ms.rw.RUnlock()
 	err = KeyNotExists
 	return
 }
 
 func (ms *MemorySession)MustGet(key string)(interface{}){
-	ms.rw.RLock()
-	defer ms.rw.RUnlock()
-	return ms.kv[key]
+	v,_ := ms.kv.Load(key)
+	return v
 }
+
+
 func (ms *MemorySession)GetAll()(map[string]interface{},error){
-	return ms.kv,nil
+	m := make(map[string]interface{})
+	fn := func(key interface{},val interface{})bool{
+		m[key.(string)] = val
+		return true
+	}
+	ms.kv.Range(fn)
+	return m,nil
 }
 
 func  (ms *MemorySession)ID()string{
@@ -82,9 +85,7 @@ func  (ms *MemorySession)ID()string{
 }
 
 func(ms *MemorySession)Delete(key string){
-	ms.rw.Lock()
-	defer ms.rw.Unlock()
-	delete(ms.kv,key)
+	ms.kv.Delete(key)
 }
 
 func (ms *MemorySession)Save()error{
@@ -99,17 +100,16 @@ func (ms *MemorySession)Close(){
 
 type RedisSession struct {
 	id string
-	kv map[string]interface{}
+	kv sync.Map
 	conn redis.Conn
-	rw sync.RWMutex
 	flag int
+	expire time.Time
 }
 
 
 func newRedisSession(idString string,pool *redis.Pool)(*RedisSession){
 	rs :=  &RedisSession{
 		id:idString,
-		kv:make(map[string]interface{},10),
 		conn:pool.Get(),
 		flag:SessionFlagNone,
 	}
@@ -117,62 +117,61 @@ func newRedisSession(idString string,pool *redis.Pool)(*RedisSession){
 }
 
 func(rs *RedisSession)Set(key string,val interface{}){
-	rs.rw.Lock()
-	defer rs.rw.Unlock()
-	rs.kv[key] = val
+	rs.kv.Load(key)
 	rs.flag = SessionFlagModify
 }
 
 
-func(rs * RedisSession)readFromRedis()error{
+func(rs * RedisSession)readFromRedis()(map[string]interface{},error){
 	reply,err := rs.conn.Do("GET",rs.id)
 	data,err := redis.String(reply,err)
 	if err != nil{
-		return err
+		return nil,err
 	}
-	err = json.Unmarshal([]byte(data),&rs.kv)
-	if err != nil{
-		return err
-	}
-	return nil
+	var m = make(map[string]interface{})
+	err = json.Unmarshal([]byte(data),&m)
+	return m,err
 }
 
 
 func(rs *RedisSession)Get(key string)(val interface{},err error){
-	rs.rw.RLock()
-	defer rs.rw.RUnlock()
+	var m map[string]interface{}
 	if rs.flag == SessionFlagNone{
-		err = rs.readFromRedis()
+		m,err = rs.readFromRedis()
 		if err != nil{
-			return nil,err
+			return
+		}
+		for k,v := range m{
+			rs.Set(k,v)
 		}
 	}
-	val = rs.kv[key]
-	return val,nil
+	var ok bool
+	if val,ok = rs.kv.Load(key); !ok{
+		err = KeyNotExists
+	}
+	return
 }
 
 
+
 func(rs *RedisSession)MustGet(key string)(interface{}){
-	val,err := rs.Get(key)
-	if err != nil{
-		return nil
-	}
+	val,_ := rs.Get(key)
 	return val
 }
 
 
 func (rs *RedisSession)GetAll()(map[string]interface{},error){
-	rs.rw.RLock()
-	defer rs.rw.RUnlock()
 	if rs.flag == SessionFlagNone{
-		err := rs.readFromRedis()
-		if err != nil{
-			return nil,err
-		}
+		m ,err := rs.readFromRedis()
+		return m,err
 	}
-	all := rs.kv
-	return all,nil
-
+	m := make(map[string]interface{})
+	fn := func(key interface{},val interface{})bool{
+		m[key.(string)] = val
+		return true
+	}
+	rs.kv.Range(fn)
+	return m,nil
 }
 
 
@@ -181,16 +180,18 @@ func (rs *RedisSession)ID()string{
 }
 
 func(rs *RedisSession)Delete(key string){
-	rs.rw.Lock()
-	defer rs.rw.Unlock()
-	delete(rs.kv,key)
+	rs.kv.Delete(key)
 }
 
 
 func (rs *RedisSession)Save()error{
-	rs.rw.Lock()
-	defer rs.rw.Unlock()
-	data,err := json.Marshal(rs.kv)
+	m := make(map[string]interface{})
+	fn := func(key interface{},val interface{})bool{
+		m[key.(string)] = val
+		return true
+	}
+	rs.kv.Range(fn)
+	data,err := json.Marshal(m)
 	if err != nil{
 		return err
 	}
@@ -198,7 +199,7 @@ func (rs *RedisSession)Save()error{
 	if err != nil{
 		return fmt.Errorf("set kv failed:%s",err.Error())
 	}
-	defer rs.conn.Flush()
+	//defer rs.conn.Flush() 如果数据太大会阻塞redis
 	return nil
 }
 
